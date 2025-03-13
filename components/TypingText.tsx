@@ -32,7 +32,7 @@ export function TypingText({ text, onComplete, isLoading }: TypingTextProps) {
       const timeout = setTimeout(() => {
         setDisplayText((prev) => prev + text[currentIndex]);
         setCurrentIndex((prev) => prev + 1);
-      }, 50);
+      }, 10);
 
       return () => clearTimeout(timeout);
     } else if (onComplete) {

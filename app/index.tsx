@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, StyleSheet, Pressable, Platform, Text, Button } from 'react-native';
+import { View, StyleSheet, Pressable, Alert, Platform, Text, Button } from 'react-native';
+import * as MediaLibrary from 'expo-media-library';
+import * as FileSystem from 'expo-file-system';  // Correct import
 import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
@@ -33,6 +35,38 @@ export default function CameraScreen() {
   const [processingComplete, setProcessingComplete] = useState(false);
   const rotation = useSharedValue(0);
   const cameraRef = useRef<CameraView>(null);
+  const [mediaPermission, requestMediaPermission] = MediaLibrary.usePermissions();
+
+
+  useEffect(() => {
+    const getMediaPermission = async () => {
+      const { status } = await MediaLibrary.requestPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Permission Required',
+          'Storage permission is required to save images. Please grant this permission in your device settings.',
+        );
+      }
+    };
+
+    getMediaPermission();
+  }, []);
+
+  console.log("permissions: "+permission?.granted);
+  if (!permission) {
+    // Camera permissions are still loading.
+    return <View />;
+  }
+
+  if (!permission.granted) {
+    // Camera permissions are not granted yet.
+    return (
+      <View style={styles.container}>
+        <Text style={styles.webMessage}>We need your permission to show the camera</Text>
+        <Button onPress={requestPermission} title="grant permission" />
+      </View>
+    );
+  }
 
   if (!permission) {
     // Camera permissions are still loading.
@@ -49,7 +83,6 @@ export default function CameraScreen() {
     );
   }
 
-
   const handleCapture = async () => {
     if (!cameraRef.current || capturing) return;
     setCapturing(true);
@@ -59,6 +92,7 @@ export default function CameraScreen() {
         quality: .1,
         base64: true,
       });
+
       setImageCaptured(true);
       // Process with GPT-4V
       console.log("sending photo");
@@ -145,7 +179,7 @@ export default function CameraScreen() {
       }else if(showDescription){
         return(
           <SafeAreaView style={styles.processingContainer}>
-            <LinearGradient colors={['#2D1B69', '#1E1B26']} style={styles.gradient} />
+            {/*<LinearGradient colors={['#2D1B69', '#1E1B26']} style={styles.gradient} />*/}
             <View style={styles.descriptionContainer}>
               <TypingText text={description} isLoading={!processingComplete} onComplete={() => {
               }} />
@@ -154,14 +188,18 @@ export default function CameraScreen() {
         );
       }else if(imageCaptured) {
         return(
-          <SafeAreaView style={styles.processingContainer}>
-            <LinearGradient colors={['#2D1B69', '#1E1B26']} style={styles.gradient} />
-            <View style={styles.descriptionContainer}>
-              <Text style={styles.text}>
-                  <Animated.Text>Loading...</Animated.Text>
-              </Text>
-            </View>
-          </SafeAreaView>
+          <CameraView
+            ref={cameraRef}
+            style={styles.camera}
+          >
+            <SafeAreaView style={styles.processingContainer}>
+              <View style={styles.descriptionContainer}>
+                <Text style={styles.text}>
+                  <Animated.Text>Loading</Animated.Text>
+                </Text>
+              </View>
+            </SafeAreaView>
+          </CameraView>
         );
       }else{
           console.log("capture");
@@ -204,6 +242,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#1E1B26',
   },
   gradient: {
+    opacity: .8,
     ...StyleSheet.absoluteFillObject,
   },
   camera: {
@@ -242,7 +281,7 @@ const styles = StyleSheet.create({
   },
   processingContainer: {
     flex: 1,
-    backgroundColor: '#1E1B26',
+    backgroundColor: 'rgba(30, 27, 38, 0.8)',
     padding: 20,
   },
   descriptionContainer: {

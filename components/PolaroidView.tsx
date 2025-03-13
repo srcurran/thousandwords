@@ -1,7 +1,8 @@
-import React from 'react';
-import { View, Image, Text, StyleSheet, Pressable } from 'react-native';
+import React, { useState } from 'react';
+import { View, Image, Text, StyleSheet, Alert, Pressable } from 'react-native';
 import { Save, ArrowLeft } from 'lucide-react-native';
 import * as MediaLibrary from 'expo-media-library';
+import * as FileSystem from 'expo-file-system';  // Correct import
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 interface PolaroidViewProps {
@@ -11,15 +12,39 @@ interface PolaroidViewProps {
 }
 
 export function PolaroidView({ imageUri, description, onBack }: PolaroidViewProps) {
+  const [saving, setSaving] = useState(false);
+
   const handleSave = async () => {
     try {
+      setSaving(true);
       const { status } = await MediaLibrary.requestPermissionsAsync();
-      if (status === 'granted') {
+
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Please grant permission to save images');
+        setSaving(false);
+        return;
+      }
+
+      // For remote URLs (starting with http/https), we need to download the file first
+      if (imageUri.startsWith('http')) {
+        const fileUri = `${FileSystem.documentDirectory}dalle-image-${Date.now()}.jpg`;
+        // This is the correct way to use downloadAsync in expo-file-system
+        const downloadResult = await FileSystem.downloadAsync(imageUri, fileUri);
+
+        if (downloadResult.status === 200) {
+          const asset = await MediaLibrary.createAssetAsync(downloadResult.uri);
+          await MediaLibrary.createAlbumAsync('Thousand Words', asset, false);
+        } else {
+        }
+      } else {
+        // For local URIs, we can save directly
         const asset = await MediaLibrary.createAssetAsync(imageUri);
         await MediaLibrary.createAlbumAsync('Thousand Words', asset, false);
       }
     } catch (error) {
       console.error('Failed to save image:', error);
+    } finally {
+      setSaving(false);
     }
   };
 
