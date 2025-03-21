@@ -1,14 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, StyleSheet, Pressable, Alert, Platform, Text, Button } from 'react-native';
-import * as MediaLibrary from 'expo-media-library';
-import * as FileSystem from 'expo-file-system';  // Correct import
+import { View, StyleSheet, Pressable, Platform, Text, Button, Alert } from 'react-native';
 import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
-  useAnimatedStyle,
-  withTiming,
-  withRepeat,
-  withSequence,
   useSharedValue,
 } from 'react-native-reanimated';
 import { Camera as CameraIcon } from 'lucide-react-native';
@@ -16,8 +10,8 @@ import { OpenAI } from 'openai';
 import { TypingText } from '../components/TypingText';
 import { PolaroidView } from '../components/PolaroidView';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { opacity } from 'react-native-reanimated/lib/typescript/Colors';
-
+import * as MediaLibrary from 'expo-media-library';
+import * as FileSystem from 'expo-file-system';  // Correct import
 
 const openai = new OpenAI({
   apiKey: process.env.EXPO_PUBLIC_OPENAI_API_KEY,
@@ -27,32 +21,24 @@ const openai = new OpenAI({
 export default function CameraScreen() {
   const [facing, setFacing] = useState<CameraType>('back');
   const [permission, requestPermission] = useCameraPermissions();
+  const [mediaPermission, requestMediaPermission] = MediaLibrary.usePermissions();
   const [capturing, setCapturing] = useState(false);
   const [imageCaptured, setImageCaptured] = useState(false);
   const [description, setDescription] = useState<string>('');
   const [generatedImage, setGeneratedImage] = useState<string>('');
   const [showDescription, setShowDescription] = useState(false);
   const [processingComplete, setProcessingComplete] = useState(false);
+  const [originalPhotoUri, setOriginalPhotoUri] = useState<string>('');
   const rotation = useSharedValue(0);
   const cameraRef = useRef<CameraView>(null);
-  const [mediaPermission, requestMediaPermission] = MediaLibrary.usePermissions();
-
 
   useEffect(() => {
-    const getMediaPermission = async () => {
-      const { status } = await MediaLibrary.requestPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert(
-          'Permission Required',
-          'Storage permission is required to save images. Please grant this permission in your device settings.',
-        );
-      }
-    };
-
-    getMediaPermission();
+    // Request media library permissions on component mount
+    if (!mediaPermission) {
+      requestMediaPermission();
+    }
   }, []);
 
-  console.log("permissions: "+permission?.granted);
   if (!permission) {
     // Camera permissions are still loading.
     return <View />;
@@ -68,20 +54,38 @@ export default function CameraScreen() {
     );
   }
 
-  if (!permission) {
-    // Camera permissions are still loading.
-    return <View />;
-  }
+  const saveImageToGallery = async (uri: string, prefix: string) => {
+    try {
+      if (!mediaPermission?.granted) {
+        const { status } = await MediaLibrary.requestPermissionsAsync();
+        if (status !== 'granted') {
+          console.log('Media library permission not granted');
+          return;
+        }
+      }
 
-  if (!permission.granted) {
-    // Camera permissions are not granted yet.
-    return (
-      <View style={styles.container}>
-        <Text style={styles.webMessage}>We need your permission to show the camera</Text>
-        <Button onPress={requestPermission} title="grant permission" />
-      </View>
-    );
-  }
+      // For remote URLs (starting with http/https), download the file first
+      let fileUri = uri;
+      if (uri.startsWith('http')) {
+        fileUri = `${FileSystem.documentDirectory}${prefix}-${Date.now()}.jpg`;
+
+        // This is the correct way to use downloadAsync
+        const downloadResult = await FileSystem.downloadAsync(uri, fileUri);
+
+        if (downloadResult.status !== 200) {
+          console.error('Failed to download image');
+          return;
+        }
+        fileUri = downloadResult.uri;
+      }
+
+      const asset = await MediaLibrary.createAssetAsync(fileUri);
+      await MediaLibrary.createAlbumAsync('Thousand Words', asset, false);
+      console.log(`${prefix} image saved to gallery`);
+    } catch (error) {
+      console.error(`Failed to save ${prefix} image:`, error);
+    }
+  };
 
   const handleCapture = async () => {
     if (!cameraRef.current || capturing) return;
@@ -89,9 +93,15 @@ export default function CameraScreen() {
     try {
       console.log("capturing");
       const photo = await cameraRef.current.takePictureAsync({
-        quality: .1,
+        quality: 0.7,
         base64: true,
       });
+
+      // Save original photo URI for auto-saving later
+      setOriginalPhotoUri(photo.uri);
+
+      // Auto-save the original photo
+      await saveImageToGallery(photo.uri, 'original');
 
       setImageCaptured(true);
       // Process with GPT-4V
@@ -139,9 +149,13 @@ export default function CameraScreen() {
       if (generatedImageUrl) {
         setGeneratedImage(generatedImageUrl);
         setProcessingComplete(true);
+
+        // Auto-save the generated image
+        await saveImageToGallery(generatedImageUrl, 'generated');
       }
     } catch (error) {
       console.error('Failed to process image:', error);
+      Alert.alert('Error', 'Failed to process image. Please try again.');
     } finally {
       setCapturing(false);
     }
@@ -152,6 +166,7 @@ export default function CameraScreen() {
     setGeneratedImage('');
     setShowDescription(false);
     setProcessingComplete(false);
+    setOriginalPhotoUri('');
   };
 
   if (Platform.OS === 'web') {
@@ -172,67 +187,65 @@ export default function CameraScreen() {
   }
 
   if (permission.granted) {
-      if(processingComplete) {
-        return(
-            <PolaroidView imageUri={generatedImage} description={description} onBack={handleBack} />
-        );
-      }else if(showDescription){
-        return(
+    if(processingComplete) {
+      return(
+        <PolaroidView imageUri={generatedImage} description={description} onBack={handleBack} />
+      );
+    }else if(showDescription){
+      return(
+        <SafeAreaView style={styles.processingContainer}>
+          <View style={styles.descriptionContainer}>
+            <TypingText text={description} isLoading={!processingComplete} onComplete={() => {
+            }} />
+          </View>
+        </SafeAreaView>
+      );
+    }else if(imageCaptured) {
+      return(
+        <CameraView
+          ref={cameraRef}
+          style={styles.camera}
+        >
           <SafeAreaView style={styles.processingContainer}>
-            {/*<LinearGradient colors={['#2D1B69', '#1E1B26']} style={styles.gradient} />*/}
             <View style={styles.descriptionContainer}>
-              <TypingText text={description} isLoading={!processingComplete} onComplete={() => {
-              }} />
+              <Text style={styles.text}>
+                <Animated.Text>Processing image...</Animated.Text>
+              </Text>
             </View>
           </SafeAreaView>
-        );
-      }else if(imageCaptured) {
-        return(
+        </CameraView>
+      );
+    }else{
+      console.log("capture");
+      return(
+        <View style={styles.container}>
           <CameraView
             ref={cameraRef}
             style={styles.camera}
           >
-            <SafeAreaView style={styles.processingContainer}>
-              <View style={styles.descriptionContainer}>
-                <Text style={styles.text}>
-                  <Animated.Text>Loading</Animated.Text>
-                </Text>
-              </View>
+            <SafeAreaView style={styles.buttonContainer}>
+              <Pressable
+                style={styles.captureButton}
+                onPress={handleCapture}
+                disabled={capturing}
+              >
+                <Animated.View>
+                  <LinearGradient
+                    colors={['#9C27B0', '#673AB7']}
+                    style={styles.buttonGradient}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                  />
+                </Animated.View>
+                <View style={styles.innerButton}>
+                  <CameraIcon color="#fff" size={32} />
+                </View>
+              </Pressable>
             </SafeAreaView>
           </CameraView>
-        );
-      }else{
-          console.log("capture");
-          return(
-            <View style={styles.container}>
-              <CameraView
-                ref={cameraRef}
-                style={styles.camera}
-              >
-                <SafeAreaView style={styles.buttonContainer}>
-                  <Pressable
-                    style={styles.captureButton}
-                    onPress={handleCapture}
-                    disabled={capturing}
-                  >
-                    {/*<Animated.View style={[styles.gradientContainer, gradientStyle]}>*/}
-                    <Animated.View>
-                      <LinearGradient
-                        colors={['#9C27B0', '#673AB7']}
-                        style={styles.buttonGradient}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                      />
-                    </Animated.View>
-                    <View style={styles.innerButton}>
-                      <CameraIcon color="#fff" size={32} />
-                    </View>
-                  </Pressable>
-                </SafeAreaView>
-              </CameraView>
-            </View>
-          );
-      }
+        </View>
+      );
+    }
   }
 }
 
