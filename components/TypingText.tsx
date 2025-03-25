@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Text, StyleSheet } from 'react-native';
 import Animated, {
   useAnimatedStyle,
@@ -6,6 +6,7 @@ import Animated, {
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
+
 
 interface TypingTextProps {
   text: string;
@@ -41,12 +42,13 @@ export function TypingText({ text, onComplete, isLoading }: TypingTextProps) {
   }, [currentIndex, text, onComplete]);
 
   return (
-    <Text style={styles.text}>
-      {displayText}
-      {(currentIndex < text.length || isLoading) && (
-        <Animated.Text style={[styles.dots, dotOpacity]}>...</Animated.Text>
-      )}
-    </Text>
+
+        <Text style={styles.text}>
+          {displayText}
+          {(currentIndex < text.length || isLoading) && (
+            <Animated.Text style={[styles.dots, dotOpacity]}>...</Animated.Text>
+          )}
+        </Text>
   );
 }
 
@@ -60,4 +62,15 @@ const styles = StyleSheet.create({
   dots: {
     color: '#fff',
   },
+
+  camera: {
+    flex: 1,
+  },
+  buttonContainer: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    marginBottom: 50,
+  },
+
 });

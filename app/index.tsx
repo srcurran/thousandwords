@@ -83,7 +83,7 @@ export default function CameraScreen() {
       await MediaLibrary.createAlbumAsync('Thousand Words', asset, false);
       console.log(`${prefix} image saved to gallery`);
     } catch (error) {
-      console.error(`Failed to save ${prefix} image:`, error);
+      // console.error(`Failed to save ${prefix} image:`, error);
     }
   };
 
@@ -98,6 +98,7 @@ export default function CameraScreen() {
       });
 
       // Save original photo URI for auto-saving later
+
       setOriginalPhotoUri(photo.uri);
 
       // Auto-save the original photo
@@ -189,16 +190,29 @@ export default function CameraScreen() {
   if (permission.granted) {
     if(processingComplete) {
       return(
-        <PolaroidView imageUri={generatedImage} description={description} onBack={handleBack} />
+        <CameraView
+          ref={cameraRef}
+          style={styles.camera}
+        >
+          <SafeAreaView style={styles.processingContainer}>
+            <PolaroidView imageUri={generatedImage} description={description} onBack={handleBack} />
+          </SafeAreaView>
+        </CameraView>
       );
     }else if(showDescription){
       return(
+
+        <CameraView
+          ref={cameraRef}
+          style={styles.camera}
+        >
         <SafeAreaView style={styles.processingContainer}>
           <View style={styles.descriptionContainer}>
             <TypingText text={description} isLoading={!processingComplete} onComplete={() => {
             }} />
           </View>
         </SafeAreaView>
+        </CameraView>
       );
     }else if(imageCaptured) {
       return(

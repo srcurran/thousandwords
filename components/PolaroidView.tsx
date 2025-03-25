@@ -42,7 +42,7 @@ export function PolaroidView({ imageUri, description, onBack }: PolaroidViewProp
         await MediaLibrary.createAlbumAsync('Thousand Words', asset, false);
       }
     } catch (error) {
-      console.error('Failed to save image:', error);
+      // console.error('Failed to save image:', error);
     } finally {
       setSaving(false);
     }
@@ -70,7 +70,6 @@ export function PolaroidView({ imageUri, description, onBack }: PolaroidViewProp
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1E1B26',
     padding: 20,
     justifyContent: 'center',
     marginTop: -100,
