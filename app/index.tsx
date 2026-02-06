@@ -1,5 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, StyleSheet, Pressable, Platform, Text, Button, Alert, useWindowDimensions, Image } from 'react-native';
+import {
+  View,
+  StyleSheet,
+  Pressable,
+  Platform,
+  Text,
+  Button,
+  Alert,
+  useWindowDimensions,
+  Image,
+} from 'react-native';
 import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
@@ -16,7 +26,7 @@ import { TypingText } from '../components/TypingText';
 import { PolaroidView } from '../components/PolaroidView';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as MediaLibrary from 'expo-media-library';
-import * as FileSystem from 'expo-file-system/legacy';  // Using legacy API for compatibility
+import * as FileSystem from 'expo-file-system/legacy'; // Using legacy API for compatibility
 import * as MLKitTextRecognition from '@react-native-ml-kit/text-recognition';
 
 const openai = new OpenAI({
@@ -27,7 +37,8 @@ const openai = new OpenAI({
 export default function CameraScreen() {
   const [facing, setFacing] = useState<CameraType>('back');
   const [permission, requestPermission] = useCameraPermissions();
-  const [mediaPermission, requestMediaPermission] = MediaLibrary.usePermissions();
+  const [mediaPermission, requestMediaPermission] =
+    MediaLibrary.usePermissions();
   const [capturing, setCapturing] = useState(false);
   const [imageCaptured, setImageCaptured] = useState(false);
   const [description, setDescription] = useState<string>('');
@@ -36,7 +47,10 @@ export default function CameraScreen() {
   const [processingComplete, setProcessingComplete] = useState(false);
   const [originalPhotoUri, setOriginalPhotoUri] = useState<string>('');
   const rotation = useSharedValue(0);
+  const buttonScale = useSharedValue(1);
+  const buttonOpacity = useSharedValue(1);
   const cameraRef = useRef<CameraView>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
   const { width, height } = useWindowDimensions();
 
   const animatedGradientStyle = useAnimatedStyle(() => {
@@ -44,20 +58,28 @@ export default function CameraScreen() {
       rotation.value,
       [0, 1],
       [0, 360],
-      Extrapolate.CLAMP
+      Extrapolate.CLAMP,
     );
     return {
       transform: [{ rotate: `${rotate}deg` }],
     };
   });
 
+  const animatedButtonStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ scale: buttonScale.value }],
+    };
+  });
+
+  const animatedCastStyle = useAnimatedStyle(() => {
+    return {
+      opacity: buttonOpacity.value,
+    };
+  });
+
   useEffect(() => {
     // Start rotation animation
-    rotation.value = withRepeat(
-      withTiming(1, { duration: 3000 }),
-      -1,
-      false
-    );
+    rotation.value = withRepeat(withTiming(1, { duration: 3000 }), -1, false);
   }, [rotation]);
 
   useEffect(() => {
@@ -76,31 +98,39 @@ export default function CameraScreen() {
     // Camera permissions are not granted yet.
     return (
       <View style={styles.container}>
-        <Text style={styles.webMessage}>We need your permission to show the camera</Text>
+        <Text style={styles.webMessage}>
+          We need your permission to show the camera
+        </Text>
         <Button onPress={requestPermission} title="grant permission" />
       </View>
     );
   }
 
-  const generateLocalDescription = async (photoUri: string): Promise<string> => {
+  const generateLocalDescription = async (
+    photoUri: string,
+  ): Promise<string> => {
     try {
-      console.log("generating local description");
+      console.log('generating local description');
       // Get image dimensions to understand composition
-      const imageSize = await new Promise<{ width: number; height: number }>((resolve, reject) => {
-        Image.getSize(
-          photoUri,
-          (width, height) => resolve({ width, height }),
-          reject
-        );
-      });
+      const imageSize = await new Promise<{ width: number; height: number }>(
+        (resolve, reject) => {
+          Image.getSize(
+            photoUri,
+            (width, height) => resolve({ width, height }),
+            reject,
+          );
+        },
+      );
 
       // Try to extract text using ML Kit
-      let extractedText = "";
+      let extractedText = '';
       try {
-        const result = await (MLKitTextRecognition as any).onDeviceTextRecognizer?.processImage(photoUri);
-        extractedText = result?.text?.substring(0, 200) || "";
+        const result = await (
+          MLKitTextRecognition as any
+        ).onDeviceTextRecognizer?.processImage(photoUri);
+        extractedText = result?.text?.substring(0, 200) || '';
       } catch (e) {
-        console.log("Text recognition failed, continuing with visual analysis");
+        console.log('Text recognition failed, continuing with visual analysis');
       }
 
       // Generate description based on visible characteristics
@@ -136,56 +166,66 @@ export default function CameraScreen() {
         6. Ensure authentic detail and texture throughout
         7. Maintain proper depth separation between foreground and background
         8. Preserve any visible text or graphics
-      `
+      `;
 
       // Pad to reach desired character count
       while (description.length < 1500) {
-        description += "\nAdditional details to aid in accurate recreation: The image contains multiple layers of visual information with proper depth perception and realistic lighting conditions.";
+        description +=
+          '\nAdditional details to aid in accurate recreation: The image contains multiple layers of visual information with proper depth perception and realistic lighting conditions.';
       }
 
       return description.substring(0, 3500);
     } catch (error) {
       console.error('Local description generation failed:', error);
-      return "A photograph with natural lighting, clear subject focus, supporting background context, authentic color palette, dimensional depth, and detailed textures meant for accurate visual reproduction.";
+      return 'A photograph with natural lighting, clear subject focus, supporting background context, authentic color palette, dimensional depth, and detailed textures meant for accurate visual reproduction.';
     }
   };
 
-  const generateChatGPTDescription = async (photoBase64: string): Promise<string> => {
+  const generateChatGPTDescription = async (
+    photoBase64: string,
+    signal?: AbortSignal,
+  ): Promise<string> => {
     try {
-      console.log("generating ChatGPT description");
-      const response = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "text",
-                text: "Using up to 4000 characters: describe this photo as accurately as possible so that DALL-E may make a duplicate image that is as close as possible to the real image. Include details about lighting, composition, colors, textures, and any visible objects or text. Focus on accuracy and completeness."
-              },
-              {
-                type: "image_url",
-                image_url: {
-                  url: `data:image/jpeg;base64,${photoBase64}`,
-                }
-              }
-            ],
-          },
-        ],
-        max_tokens: 4096,
-      });
+      console.log('generating ChatGPT description');
+      const response = await openai.chat.completions.create(
+        {
+          model: 'gpt-4o-mini',
+          messages: [
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'text',
+                  text: 'Using up to 4000 characters: describe this photo as accurately as possible so that DALL-E may make a duplicate image that is as close as possible to the real image. Include details about lighting, composition, colors, textures, and any visible objects or text. Focus on accuracy and completeness.',
+                },
+                {
+                  type: 'image_url',
+                  image_url: {
+                    url: `data:image/jpeg;base64,${photoBase64}`,
+                  },
+                },
+              ],
+            },
+          ],
+          max_tokens: 4096,
+        },
+        { signal },
+      );
 
-      const imageDescription = (response.choices[0]?.message?.content || '');
-      console.log("Token usage:", response.usage?.total_tokens);
-      
-      if (imageDescription.includes("unable to assist") || imageDescription.includes("policy")) {
+      const imageDescription = response.choices[0]?.message?.content || '';
+      console.log('Token usage:', response.usage?.total_tokens);
+
+      if (
+        imageDescription.includes('unable to assist') ||
+        imageDescription.includes('policy')
+      ) {
         throw new Error(`Image content policy violation: ${imageDescription}`);
       }
-      
+
       return imageDescription;
     } catch (error) {
       console.error('ChatGPT description generation failed:', error);
-      return "";
+      return '';
     }
   };
 
@@ -226,59 +266,87 @@ export default function CameraScreen() {
   const handleCapture = async () => {
     if (!cameraRef.current || capturing) return;
     setCapturing(true);
+
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+    const { signal } = abortController;
+
     try {
-      console.log("capturing");
+      console.log('capturing');
       const photo = await cameraRef.current.takePictureAsync({
         quality: 0.3,
         base64: true,
       });
+
+      if (signal.aborted) return;
 
       setOriginalPhotoUri(photo.uri);
       await saveImageToGallery(photo.uri, 'original');
       setImageCaptured(true);
 
       // Start both description generations in parallel
-      console.log("generating both descriptions in parallel");
+      console.log('generating both descriptions in parallel');
       const localDescriptionPromise = generateLocalDescription(photo.uri);
-      const chatGPTDescriptionPromise = generateChatGPTDescription(photo.base64 || '');
+      const chatGPTDescriptionPromise = generateChatGPTDescription(
+        photo.base64 || '',
+        signal,
+      );
 
       // Wait for local description and display it immediately
       const localDescription = await localDescriptionPromise;
+      if (signal.aborted) return;
+
       setDescription(localDescription);
       setShowDescription(true);
       setImageCaptured(false);
 
       // Wait for ChatGPT description
       const chatGPTDescription = await chatGPTDescriptionPromise;
+      if (signal.aborted) return;
+
       let descriptionForDALLE = localDescription;
 
       // Append ChatGPT description once it completes
       if (chatGPTDescription) {
-        console.log("Appending ChatGPT description to local description");
-        const combinedDescription = localDescription + "\n\n" + chatGPTDescription;
+        console.log('Appending ChatGPT description to local description');
+        const combinedDescription =
+          localDescription + '\n\n' + chatGPTDescription;
         setDescription(combinedDescription);
         descriptionForDALLE = combinedDescription;
       }
 
       // Generate DALL-E image with ChatGPT description
-      console.log("sending to dalle with ChatGPT description");
-      // const imageResponse = await openai.images.generate({
-      //   model: "dall-e-3",
-      //   prompt: "create an image that is as close as possible to this description: " + descriptionForDALLE.substring(0, 3900),
-      // });
+      console.log('sending to dalle with ChatGPT description');
+      const imageResponse = await openai.images.generate(
+        {
+          model: 'gpt-image-1.5',
+          prompt:
+            'create an image that is as close as possible to this description: ' +
+            descriptionForDALLE.substring(0, 3900),
+          n: 1,
+          size: '1024x1024',
+        },
+        { signal },
+      );
+      if (signal.aborted) return;
 
-      // const generatedImageUrl = imageResponse.data[0]?.url;
-      // console.log("dalle response: " + generatedImageUrl);
-      // if (generatedImageUrl) {
-      //   setGeneratedImage(generatedImageUrl);
-      //   setProcessingComplete(true);
-      //   await saveImageToGallery(generatedImageUrl, 'generated');
-      // }
+      const b64 = imageResponse.data?.[0]?.b64_json;
+      const generatedImageUrl = `data:image/png;base64,${b64}`;
+
+      if (generatedImageUrl) {
+        setGeneratedImage(generatedImageUrl);
+        setProcessingComplete(true);
+        await saveImageToGallery(generatedImageUrl, 'generated');
+      }
     } catch (error) {
+      if (signal.aborted) return;
       console.error('Failed to process image:', error);
       Alert.alert('Error', 'Failed to process image. Please try again.');
     } finally {
-      setCapturing(false);
+      if (!signal.aborted) {
+        setCapturing(false);
+      }
+      abortControllerRef.current = null;
     }
   };
 
@@ -296,8 +364,8 @@ export default function CameraScreen() {
       <View style={styles.container}>
         <View style={styles.webMessage}>
           <Text style={styles.webMessageText}>
-            Camera functionality is not available on web platforms.
-            Please use a mobile device to access this feature.
+            Camera functionality is not available on web platforms. Please use a
+            mobile device to access this feature.
           </Text>
         </View>
       </View>
@@ -305,22 +373,24 @@ export default function CameraScreen() {
   }
 
   if (permission.granted) {
-    if(processingComplete) {
-      return(
+    if (processingComplete) {
+      return (
         <View style={styles.container}>
-          <PolaroidView imageUri={generatedImage} description={description} onBack={handleBack} />
+          <PolaroidView
+            imageUri={generatedImage}
+            description={description}
+            onBack={handleBack}
+          />
         </View>
       );
-    }else if(showDescription){
-      return(
+    } else if (showDescription) {
+      return (
         <View style={styles.container}>
-          <CameraView
-            ref={cameraRef}
-            style={styles.camera}
-          >
-          </CameraView>
+          <CameraView ref={cameraRef} style={styles.camera}></CameraView>
           <SafeAreaView style={styles.processingContainer}>
-            <Animated.View style={[styles.processingGradientBg, animatedGradientStyle]}>
+            <Animated.View
+              style={[styles.processingGradientBg, animatedGradientStyle]}
+            >
               <LinearGradient
                 colors={['rgba(255, 97, 53, 0.30)', 'rgba(255, 56, 56, 0.30)']}
                 start={{ x: 0, y: 0 }}
@@ -328,28 +398,27 @@ export default function CameraScreen() {
                 style={{ flex: 1 }}
               />
             </Animated.View>
-            
-                  <TypingText text={description} isLoading={!processingComplete} onComplete={() => {}} />
-            
-            <Pressable
-              style={styles.cancelButton}
-              onPress={handleBack}
-            >
+
+            <TypingText
+              text={description}
+              isLoading={!processingComplete}
+              onComplete={() => {}}
+            />
+
+            <Pressable style={styles.cancelButton} onPress={handleBack}>
               <X color="#fff" size={28} />
             </Pressable>
           </SafeAreaView>
         </View>
       );
-    }else if(imageCaptured) {
-      return(
-                <View style={styles.container}>
-          <CameraView
-            ref={cameraRef}
-            style={styles.camera}
-          >
-          </CameraView>
-<SafeAreaView style={styles.processingContainer}>
-            <Animated.View style={[styles.processingGradientBg, animatedGradientStyle]}>
+    } else if (imageCaptured) {
+      return (
+        <View style={styles.container}>
+          <CameraView ref={cameraRef} style={styles.camera}></CameraView>
+          <SafeAreaView style={styles.processingContainer}>
+            <Animated.View
+              style={[styles.processingGradientBg, animatedGradientStyle]}
+            >
               <LinearGradient
                 colors={['rgba(255, 97, 53, 0.30)', 'rgba(255, 56, 56, 0.30)']}
                 start={{ x: 0, y: 0 }}
@@ -357,44 +426,58 @@ export default function CameraScreen() {
                 style={{ flex: 1 }}
               />
             </Animated.View>
-            <SafeAreaView style={[styles.processingContent, { paddingHorizontal: 20 }]}>
-              <Pressable
-                style={styles.cancelButton}
-                onPress={handleBack}
-              >
+            <SafeAreaView
+              style={[styles.processingContent, { paddingHorizontal: 20 }]}
+            >
+              <Pressable style={styles.cancelButton} onPress={handleBack}>
                 <X color="#fff" size={28} />
               </Pressable>
               <View style={styles.descriptionContainer}>
                 <Text style={styles.text}>
                   <Animated.Text>Processing image...</Animated.Text>
-
                 </Text>
               </View>
             </SafeAreaView>
           </SafeAreaView>
         </View>
-        
-              );
-    }else{
-      console.log("capture");
-      return(
+      );
+    } else {
+      console.log('capture');
+      const isLandscape = width > height;
+      return (
         <View style={styles.container}>
-          <CameraView
-            ref={cameraRef}
-            style={styles.camera}
+          <CameraView ref={cameraRef} style={styles.camera}></CameraView>
+          <SafeAreaView
+            style={[
+              styles.buttonContainer,
+              isLandscape
+                ? styles.buttonContainerLandscape
+                : styles.buttonContainerPortrait,
+            ]}
           >
-          </CameraView>
-            <SafeAreaView style={styles.buttonContainer}>
+            <Animated.View style={animatedButtonStyle}>
               <Pressable
                 style={styles.captureButton}
                 onPress={handleCapture}
+                onPressIn={() => {
+                  buttonScale.value = withTiming(1.15, { duration: 100 });
+                  buttonOpacity.value = withTiming(0.4, { duration: 100 });
+                }}
+                onPressOut={() => {
+                  buttonScale.value = withTiming(1, { duration: 150 });
+                  buttonOpacity.value = withTiming(0, { duration: 150 });
+                }}
                 disabled={capturing}
               >
                 <View style={styles.innerButton}>
                   <CameraIcon color="#fff" size={32} />
+                  <Animated.View
+                    style={[styles.buttonCast, animatedCastStyle]}
+                  />
                 </View>
               </Pressable>
-            </SafeAreaView>
+            </Animated.View>
+          </SafeAreaView>
         </View>
       );
     }
@@ -416,8 +499,16 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     flex: 1,
+  },
+  buttonContainerPortrait: {
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    paddingBottom: 60,
+  },
+  buttonContainerLandscape: {
     justifyContent: 'center',
     alignItems: 'flex-end',
+    paddingLeft: 60,
   },
   captureButton: {
     width: 80,
@@ -440,9 +531,23 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: '#2D1B69',
+    backgroundColor: '#5432c3',
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
+    elevation: 16,
+  },
+  buttonCast: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 36,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   processingContainer: {
     flex: 1,
@@ -458,7 +563,6 @@ const styles = StyleSheet.create({
     left: -1000,
     right: -1000,
     bottom: -1000,
-
   },
   processingContent: {
     flex: 1,
