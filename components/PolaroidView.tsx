@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Image, Text, StyleSheet, Alert, Pressable } from 'react-native';
+import { View, Image, Text, StyleSheet, Alert, Pressable, useWindowDimensions } from 'react-native';
 import { Save, ArrowLeft } from 'lucide-react-native';
 import * as MediaLibrary from 'expo-media-library';
 import * as FileSystem from 'expo-file-system';  // Correct import
@@ -13,6 +13,14 @@ interface PolaroidViewProps {
 
 export function PolaroidView({ imageUri, description, onBack }: PolaroidViewProps) {
   const [saving, setSaving] = useState(false);
+  const { width, height } = useWindowDimensions();
+  
+  // Determine if in landscape orientation
+  const isLandscape = width > height;
+  
+  // Calculate rotation angle for icons to keep them upright
+  // In landscape, rotate by -90 degrees to counteract the view rotation
+  const iconRotation = isLandscape ? -90 : 0;
 
   const handleSave = async () => {
     try {
@@ -51,10 +59,10 @@ export function PolaroidView({ imageUri, description, onBack }: PolaroidViewProp
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Pressable onPress={onBack} style={styles.backButton}>
+        <Pressable onPress={onBack} style={[styles.backButton, { transform: [{ rotate: `${iconRotation}deg` }] }]}>
           <ArrowLeft color="#fff" size={24} />
         </Pressable>
-        <Pressable onPress={handleSave} style={styles.saveButton}>
+        <Pressable onPress={handleSave} style={[styles.saveButton, { transform: [{ rotate: `${iconRotation}deg` }] }]}>
           <Save color="#fff" size={24} />
         </Pressable>
       </View>
@@ -87,7 +95,7 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   polaroid: {
-    backgroundColor: '#fff',
+    backgroundColor: '#f5f',
     padding: 10,
     paddingBottom: 40,
     borderRadius: 4,

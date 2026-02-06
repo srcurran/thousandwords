@@ -1,11 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, StyleSheet, Pressable, Platform, Text, Button, Alert } from 'react-native';
+import { View, StyleSheet, Pressable, Platform, Text, Button, Alert, useWindowDimensions } from 'react-native';
 import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
   useSharedValue,
 } from 'react-native-reanimated';
-import { Camera as CameraIcon } from 'lucide-react-native';
+import { Camera as CameraIcon, X } from 'lucide-react-native';
 import { OpenAI } from 'openai';
 import { TypingText } from '../components/TypingText';
 import { PolaroidView } from '../components/PolaroidView';
@@ -31,6 +31,14 @@ export default function CameraScreen() {
   const [originalPhotoUri, setOriginalPhotoUri] = useState<string>('');
   const rotation = useSharedValue(0);
   const cameraRef = useRef<CameraView>(null);
+  const { width, height } = useWindowDimensions();
+  
+  // Determine if in landscape orientation
+  const isLandscape = width > height;
+  
+  // Calculate rotation angle for icons to keep them upright
+  // In landscape, rotate by -90 degrees to counteract the view rotation
+  const iconRotation = isLandscape ? -90 : 0;
 
   useEffect(() => {
     // Request media library permissions on component mount
@@ -67,7 +75,7 @@ export default function CameraScreen() {
       // For remote URLs (starting with http/https), download the file first
       let fileUri = uri;
       if (uri.startsWith('http')) {
-        fileUri = `${FileSystem.documentDirectory}${prefix}-${Date.now()}.jpg`;
+        fileUri = `${FileSystem.Directory}${prefix}-${Date.now()}.jpg`;
 
         // This is the correct way to use downloadAsync
         const downloadResult = await FileSystem.downloadAsync(uri, fileUri);
@@ -93,7 +101,7 @@ export default function CameraScreen() {
     try {
       console.log("capturing");
       const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.7,
+        quality: 0.3,
         base64: true,
       });
 
@@ -108,14 +116,14 @@ export default function CameraScreen() {
       // Process with GPT-4V
       console.log("sending photo");
       const response = await openai.chat.completions.create({
-        model: "gpt-4o",
+        model: "gpt-4o-mini",
         messages: [
           {
             role: "user",
             content: [
               {
                 type: "text",
-                text: "Using a thousand words, describe this photo as accurately as possible so that Dall-E may make a duplicate image that is as close as possible to the real image"
+                text: "Using 4000 characters: describe this photo as accurately as possible so that Dall-E may make a duplicate image that is as close as possible to the real image. When you have completed the first draft count the words & then add more words to reach the 4000 characters. "
               },
               {
                 type: "image_url",
@@ -126,23 +134,22 @@ export default function CameraScreen() {
             ],
           },
         ],
+        max_tokens: 4096,
       });
 
-      console.log("gpt 4o raw response: " + response.choices[0]?.message?.content);
+      console.log("Token usage:", response.usage?.total_tokens);
 
-      const imageDescription = response.choices[0]?.message?.content || '';
-      console.log("gpt 4o response: " + imageDescription);
-
-      setDescription(imageDescription);
+      const imageDescription = "make a realistic photo using the following description: " + (response.choices[0]?.message?.content || '');
+      // console.log("gpt 4o response: " + imageDescription);
+      setDescription(imageDescription);1
       setShowDescription(true);
       setImageCaptured(false);
       // Generate image with DALL-E
-      console.log("sending to dalle");
-      const imageResponse = await openai.images.generate({
-        model: "dall-e-3",
-        prompt: imageDescription,
-        n: 1,
-        size: "1024x1024",
+      console.log("sending to dalle: "+ imageDescription);
+      const imageResponse = await openai.images.generate.create({
+        model: "gpt-image-1.5",
+        prompt: imageDescription.substring(0, 3900),
+        tools: [{type: "image_generation"}],
       });
 
       const generatedImageUrl = imageResponse.data[0]?.url;
@@ -207,7 +214,13 @@ export default function CameraScreen() {
           style={styles.camera}
         >
         <SafeAreaView style={styles.processingContainer}>
-          <View style={styles.descriptionContainer}>
+          <Pressable
+            style={styles.cancelButton}
+            onPress={handleBack}
+          >
+            <X color="#fff" size={28} />
+          </Pressable>
+          <View style={[styles.descriptionContainer, { transform: [{ rotate: `${iconRotation}deg` }] }]}>
             <TypingText text={description} isLoading={!processingComplete} onComplete={() => {
             }} />
           </View>
@@ -221,7 +234,13 @@ export default function CameraScreen() {
           style={styles.camera}
         >
           <SafeAreaView style={styles.processingContainer}>
-            <View style={styles.descriptionContainer}>
+            <Pressable
+              style={styles.cancelButton}
+              onPress={handleBack}
+            >
+              <X color="#fff" size={28} />
+            </Pressable>
+            <View style={[styles.descriptionContainer, { transform: [{ rotate: `${iconRotation}deg` }] }]}>
               <Text style={styles.text}>
                 <Animated.Text>Processing image...</Animated.Text>
               </Text>
@@ -251,7 +270,7 @@ export default function CameraScreen() {
                     end={{ x: 1, y: 1 }}
                   />
                 </Animated.View>
-                <View style={styles.innerButton}>
+                <View style={[styles.innerButton, { transform: [{ rotate: `${iconRotation}deg` }] }]}>
                   <CameraIcon color="#fff" size={32} />
                 </View>
               </Pressable>
@@ -311,7 +330,13 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(30, 27, 38, 0.8)',
     padding: 20,
   },
-  descriptionContainer: {
+  cancelButton: {
+    position: 'absolute',
+    top: 20,
+    right: 20,
+    zIndex: 10,
+    padding: 8,
+  },
     flex: 1,
     justifyContent: 'center',
     alignItems: 'flex-start',
