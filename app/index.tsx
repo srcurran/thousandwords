@@ -21,10 +21,11 @@ import Animated, {
   interpolate,
   Extrapolate,
 } from 'react-native-reanimated';
-import { Camera as CameraIcon, X } from 'lucide-react-native';
+import { X } from 'lucide-react-native';
 import { OpenAI } from 'openai';
 import { TypingText } from '../components/TypingText';
 import { PolaroidView } from '../components/PolaroidView';
+import { CameraModeSelector } from '../components/CameraModeSelector';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as MediaLibrary from 'expo-media-library';
 import * as FileSystem from 'expo-file-system/legacy'; // Using legacy API for compatibility
@@ -51,6 +52,7 @@ export default function CameraScreen() {
   const [showDescription, setShowDescription] = useState(false);
   const [processingComplete, setProcessingComplete] = useState(false);
   const [originalPhotoUri, setOriginalPhotoUri] = useState<string>('');
+  const [cameraMode, setCameraMode] = useState<string>('photo');
   const rotation = useSharedValue(0);
   const buttonScale = useSharedValue(1);
   const buttonOpacity = useSharedValue(1);
@@ -226,16 +228,36 @@ When recreating this image:
 
   const generateImageWithStreaming = async (
     prompt: string,
+    mode: string,
     signal?: AbortSignal,
   ): Promise<string> => {
     try {
       console.log('Starting streaming image generation');
       console.log('Prompt length:', prompt.length);
+      console.log('Camera mode:', mode);
+
+      // Customize prompt based on camera mode
+      let promptPrefix = '';
+      switch (mode) {
+        case 'picture-book':
+          promptPrefix =
+            'Create a vibrant cartoon illustration in a picture book style with bold outlines, bright colors, and whimsical character design based on this description: ';
+          break;
+        case '90s-disposable':
+          promptPrefix =
+            'Create a photograph with authentic 90s disposable camera aesthetics: soft focus, grainy film texture, light leaks, slightly overexposed highlights, warm color cast, vignetting, and that nostalgic lo-fi film quality. Based on this description: ';
+          break;
+        case 'photo':
+        default:
+          promptPrefix =
+            'Create an image that is as close as possible to this description: ';
+          break;
+      }
+
+      console.log('Final prompt:', promptPrefix + prompt.substring(0, 3900));
 
       const stream = await openai.images.generate({
-        prompt:
-          'create an image that is as close as possible to this description: ' +
-          prompt.substring(0, 3900),
+        prompt: promptPrefix + prompt.substring(0, 3900),
         model: 'gpt-image-1.5',
         n: 1,
         stream: true,
@@ -365,7 +387,7 @@ When recreating this image:
       // Replace local description with ChatGPT description once it completes
       if (chatGPTDescription) {
         console.log('Replacing local description with ChatGPT description');
-        setDescription(chatGPTDescription);
+        setDescription('\n\n\n' + chatGPTDescription);
         descriptionForDALLE = chatGPTDescription;
       }
 
@@ -373,6 +395,7 @@ When recreating this image:
       console.log('sending to dalle with streaming');
       const generatedImageUrl = await generateImageWithStreaming(
         descriptionForDALLE,
+        cameraMode,
         signal,
       );
       if (signal.aborted) return;
@@ -520,6 +543,20 @@ When recreating this image:
                 : styles.buttonContainerPortrait,
             ]}
           >
+            <View
+              style={[isLandscape && styles.modeSelectorContainerLandscape]}
+            >
+              <CameraModeSelector
+                modes={[
+                  { id: 'photo', label: 'Photorealistic' },
+                  { id: 'picture-book', label: 'Cartoon' },
+                  { id: '90s-disposable', label: 'Disposable' },
+                ]}
+                selectedMode={cameraMode}
+                onModeChange={setCameraMode}
+                isLandscape={isLandscape}
+              />
+            </View>
             <Animated.View style={animatedButtonStyle}>
               <Pressable
                 style={styles.captureButton}
@@ -535,7 +572,7 @@ When recreating this image:
                 disabled={capturing}
               >
                 <View style={styles.innerButton}>
-                  <CameraIcon color="#fff" size={32} />
+                  <View style={styles.innerCircle} />
                   <Animated.View
                     style={[styles.buttonCast, animatedCastStyle]}
                   />
@@ -583,14 +620,24 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   buttonContainerPortrait: {
+    flexDirection: 'column',
     justifyContent: 'flex-end',
     alignItems: 'center',
-    paddingBottom: 60,
+    paddingBottom: 20,
+    gap: 20,
   },
   buttonContainerLandscape: {
-    justifyContent: 'center',
+    flexDirection: 'column',
+    justifyContent: 'flex-end',
     alignItems: 'flex-end',
-    paddingLeft: 60,
+    paddingRight: 24,
+    paddingBottom: 40,
+    gap: 60,
+  },
+  modeSelectorContainer: {},
+  modeSelectorContainerLandscape: {
+    // borderBlockColor: 'red',
+    // borderWidth: 2,
   },
   captureButton: {
     width: 80,
@@ -610,17 +657,25 @@ const styles = StyleSheet.create({
     borderRadius: 44,
   },
   innerButton: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: '#5432c3',
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: 'transparent',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 3,
+    borderColor: '#fff',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 16,
-    elevation: 16,
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  innerCircle: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    backgroundColor: '#fff',
   },
   buttonCast: {
     position: 'absolute',
@@ -628,8 +683,8 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    borderRadius: 36,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    borderRadius: 35,
+    backgroundColor: 'rgba(0, 0, 0, 0.15)',
   },
   processingContainer: {
     flex: 1,
