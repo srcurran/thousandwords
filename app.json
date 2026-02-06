@@ -3,7 +3,7 @@
     "name": "ThousandWords",
     "slug": "ThousandWords",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "landscape",
     "icon": "./assets/images/icon.png",
     "scheme": "myapp",
     "userInterfaceStyle": "automatic",
@@ -12,7 +12,9 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.srcurran.ThousandWords",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSPhotoLibraryUsageDescription": "Allow access to save images to your photo library",
+        "NSPhotoLibraryAddOnlyUsageDescription": "Allow access to save images to your photo library"
       }
     },
     "web": {

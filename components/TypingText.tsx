@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import Animated, {
   useAnimatedStyle,
   withRepeat,
@@ -33,7 +33,7 @@ export function TypingText({ text, onComplete, isLoading }: TypingTextProps) {
       const timeout = setTimeout(() => {
         setDisplayText((prev) => prev + text[currentIndex]);
         setCurrentIndex((prev) => prev + 1);
-      }, 10);
+      }, 15);
 
       return () => clearTimeout(timeout);
     } else if (onComplete) {
@@ -42,13 +42,13 @@ export function TypingText({ text, onComplete, isLoading }: TypingTextProps) {
   }, [currentIndex, text, onComplete]);
 
   return (
-
         <Text style={styles.text}>
           {displayText}
           {(currentIndex < text.length || isLoading) && (
             <Animated.Text style={[styles.dots, dotOpacity]}>...</Animated.Text>
           )}
         </Text>
+        
   );
 }
 
@@ -58,6 +58,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 24,
     fontFamily: 'System',
+  },
+  textWrapper: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'blue',
   },
   dots: {
     color: '#fff',
