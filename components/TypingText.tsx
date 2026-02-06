@@ -6,6 +6,7 @@ import Animated, {
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 
 interface TypingTextProps {
@@ -18,22 +19,12 @@ export function TypingText({ text, onComplete, isLoading }: TypingTextProps) {
   const [displayText, setDisplayText] = useState('');
   const [currentIndex, setCurrentIndex] = useState(0);
 
-  const dotOpacity = useAnimatedStyle(() => ({
-    opacity: withRepeat(
-      withSequence(
-        withTiming(0.3, { duration: 600 }),
-        withTiming(1, { duration: 600 })
-      ),
-      -1
-    ),
-  }));
-
   useEffect(() => {
     if (currentIndex < text.length) {
       const timeout = setTimeout(() => {
         setDisplayText((prev) => prev + text[currentIndex]);
         setCurrentIndex((prev) => prev + 1);
-      }, 15);
+      }, 80);
 
       return () => clearTimeout(timeout);
     } else if (onComplete) {
@@ -42,12 +33,13 @@ export function TypingText({ text, onComplete, isLoading }: TypingTextProps) {
   }, [currentIndex, text, onComplete]);
 
   return (
-        <Text style={styles.text}>
-          {displayText}
-          {(currentIndex < text.length || isLoading) && (
-            <Animated.Text style={[styles.dots, dotOpacity]}>...</Animated.Text>
-          )}
-        </Text>
+<SafeAreaView style={styles.textWrapper}>
+  <View style={styles.contentWrapper}>
+    <Text style={styles.text}>
+      {displayText}
+    </Text>
+  </View>
+</SafeAreaView>
         
   );
 }
@@ -60,24 +52,9 @@ const styles = StyleSheet.create({
     fontFamily: 'System',
   },
   textWrapper: {
-    display: 'flex',
-    alignItems: 'flex-start',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: 'blue',
-  },
-  dots: {
-    color: '#fff',
-  },
-
-  camera: {
     flex: 1,
   },
-  buttonContainer: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    marginBottom: 50,
-  },
+  contentWrapper: {
 
+  },
 });

@@ -122,7 +122,9 @@ export default function CameraScreen() {
         - Details: Rich texture and detail throughout the image
         
         SCENE DESCRIPTION:
-        This photograph captures a real-world moment with authentic lighting, natural color variation, and dimensional depth. The composition features a clear subject with supporting background elements that provide context.
+        This photograph captures a real-world moment with authentic lighting, natural 
+        color variation, and dimensional depth. The composition features a clear subject 
+        with supporting background elements that provide context.
         
         RECONSTRUCTION GUIDELINES:
         When recreating this image:
@@ -134,7 +136,7 @@ export default function CameraScreen() {
         6. Ensure authentic detail and texture throughout
         7. Maintain proper depth separation between foreground and background
         8. Preserve any visible text or graphics
-      `.trim();
+      `
 
       // Pad to reach desired character count
       while (description.length < 1500) {
@@ -260,18 +262,18 @@ export default function CameraScreen() {
 
       // Generate DALL-E image with ChatGPT description
       console.log("sending to dalle with ChatGPT description");
-      const imageResponse = await openai.images.generate({
-        model: "dall-e-3",
-        prompt: "create an image that is as close as possible to this description: " + descriptionForDALLE.substring(0, 3900),
-      });
+      // const imageResponse = await openai.images.generate({
+      //   model: "dall-e-3",
+      //   prompt: "create an image that is as close as possible to this description: " + descriptionForDALLE.substring(0, 3900),
+      // });
 
-      const generatedImageUrl = imageResponse.data[0]?.url;
-      console.log("dalle response: " + generatedImageUrl);
-      if (generatedImageUrl) {
-        setGeneratedImage(generatedImageUrl);
-        setProcessingComplete(true);
-        await saveImageToGallery(generatedImageUrl, 'generated');
-      }
+      // const generatedImageUrl = imageResponse.data[0]?.url;
+      // console.log("dalle response: " + generatedImageUrl);
+      // if (generatedImageUrl) {
+      //   setGeneratedImage(generatedImageUrl);
+      //   setProcessingComplete(true);
+      //   await saveImageToGallery(generatedImageUrl, 'generated');
+      // }
     } catch (error) {
       console.error('Failed to process image:', error);
       Alert.alert('Error', 'Failed to process image. Please try again.');
