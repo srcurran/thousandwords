@@ -146,10 +146,9 @@ export default function CameraScreen() {
       setImageCaptured(false);
       // Generate image with DALL-E
       console.log("sending to dalle: "+ imageDescription);
-      const imageResponse = await openai.images.generate.create({
+      const imageResponse = await openai.images.generate({
         model: "gpt-image-1.5",
         prompt: imageDescription.substring(0, 3900),
-        tools: [{type: "image_generation"}],
       });
 
       const generatedImageUrl = imageResponse.data[0]?.url;
