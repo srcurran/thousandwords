@@ -22,7 +22,10 @@
       "output": "single",
       "favicon": "./assets/images/favicon.png"
     },
-    "plugins": ["expo-router", "expo-font"],
+    "plugins": [
+      "expo-router",
+      "expo-font"
+    ],
     "experiments": {
       "typedRoutes": true
     },
@@ -40,6 +43,8 @@
     "updates": {
       "url": "https://u.expo.dev/16a186ab-badb-434a-8a5a-3f501c820c51"
     },
-    "android": {}
+    "android": {
+      "package": "com.srcurran.ThousandWords"
+    }
   }
 }

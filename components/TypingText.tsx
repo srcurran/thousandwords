@@ -8,7 +8,6 @@ import Animated, {
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-
 interface TypingTextProps {
   text: string;
   onComplete?: () => void;
@@ -33,14 +32,11 @@ export function TypingText({ text, onComplete, isLoading }: TypingTextProps) {
   }, [currentIndex, text, onComplete]);
 
   return (
-<SafeAreaView style={styles.textWrapper}>
-  <View style={styles.contentWrapper}>
-    <Text style={styles.text}>
-      {displayText}
-    </Text>
-  </View>
-</SafeAreaView>
-        
+    <SafeAreaView style={styles.textWrapper}>
+      <View style={styles.contentWrapper}>
+        <Text style={styles.text}>{displayText}</Text>
+      </View>
+    </SafeAreaView>
   );
 }
 
@@ -55,6 +51,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   contentWrapper: {
-
+    padding: 20,
   },
 });

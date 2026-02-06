@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { fetch } from 'expo/fetch';
+import { useEffect, useRef, useState } from 'react';
 import {
   View,
   StyleSheet,
@@ -27,11 +28,14 @@ import { PolaroidView } from '../components/PolaroidView';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as MediaLibrary from 'expo-media-library';
 import * as FileSystem from 'expo-file-system/legacy'; // Using legacy API for compatibility
-import * as MLKitTextRecognition from '@react-native-ml-kit/text-recognition';
 
 const openai = new OpenAI({
   apiKey: process.env.EXPO_PUBLIC_OPENAI_API_KEY,
   dangerouslyAllowBrowser: true,
+  fetch: ((input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === 'string' ? input : input.toString();
+    return fetch(url, init as any);
+  }) as any,
 });
 
 export default function CameraScreen() {
@@ -43,6 +47,7 @@ export default function CameraScreen() {
   const [imageCaptured, setImageCaptured] = useState(false);
   const [description, setDescription] = useState<string>('');
   const [generatedImage, setGeneratedImage] = useState<string>('');
+  const [partialImage, setPartialImage] = useState<string>('');
   const [showDescription, setShowDescription] = useState(false);
   const [processingComplete, setProcessingComplete] = useState(false);
   const [originalPhotoUri, setOriginalPhotoUri] = useState<string>('');
@@ -122,50 +127,40 @@ export default function CameraScreen() {
         },
       );
 
-      // Try to extract text using ML Kit
-      let extractedText = '';
-      try {
-        const result = await (
-          MLKitTextRecognition as any
-        ).onDeviceTextRecognizer?.processImage(photoUri);
-        extractedText = result?.text?.substring(0, 200) || '';
-      } catch (e) {
-        console.log('Text recognition failed, continuing with visual analysis');
-      }
-
       // Generate description based on visible characteristics
       const aspectRatio = imageSize.width / imageSize.height;
       const isPortrait = imageSize.height > imageSize.width;
       const isSquare = Math.abs(aspectRatio - 1) < 0.1;
 
+      // Build scene description from labels
+      let sceneDescription = '';
+
       // Build a descriptive prompt that's fast but detailed
-      let description = `
-        PHOTOGRAPHIC IMAGE ANALYSIS:
-        Format: ${isSquare ? 'square' : isPortrait ? 'portrait' : 'landscape'} orientation
-        Dimensions: ${imageSize.width}x${imageSize.height} pixels
-        
-        VISUAL CHARACTERISTICS:
-        - Lighting: Natural indoor and outdoor lighting conditions visible
-        - Depth of field: Mix of focused and blurred areas suggesting subject separation
-        - Color palette: Multi-colored scene with varied hues and saturations
-        - Composition: Subject-centric framing with background context
-        - Details: Rich texture and detail throughout the image
-        
-        SCENE DESCRIPTION:
-        This photograph captures a real-world moment with authentic lighting, natural 
-        color variation, and dimensional depth. The composition features a clear subject 
-        with supporting background elements that provide context.
-        
-        RECONSTRUCTION GUIDELINES:
-        When recreating this image:
-        1. Maintain the ${isPortrait ? 'portrait' : isSquare ? 'square' : 'landscape'} orientation
-        2. Preserve the natural lighting quality and color temperature
-        3. Keep similar subject positioning and framing
-        4. Include the supporting background context
-        5. Match the overall mood and atmosphere
-        6. Ensure authentic detail and texture throughout
-        7. Maintain proper depth separation between foreground and background
-        8. Preserve any visible text or graphics
+      let description = `PHOTOGRAPHIC IMAGE ANALYSIS:
+Format: ${isSquare ? 'square' : isPortrait ? 'portrait' : 'landscape'} orientation
+Dimensions: ${imageSize.width}x${imageSize.height} pixels
+
+VISUAL CHARACTERISTICS:
+- Lighting: Natural indoor and outdoor lighting conditions visible
+- Depth of field: Mix of focused and blurred areas suggesting subject separation
+- Color palette: Multi-colored scene with varied hues and saturations
+- Composition: Subject-centric framing with background context
+- Details: Rich texture and detail throughout the image
+
+SCENE DESCRIPTION:
+This photograph captures a real-world moment with authentic lighting, natural
+color variation, and dimensional depth. The composition features a clear subject'
+ith supporting background elements that provide context.
+
+RECONSTRUCTION GUIDELINES:
+When recreating this image:
+1. Maintain the ${isPortrait ? 'portrait' : isSquare ? 'square' : 'landscape'} orientation
+2. Preserve the natural lighting quality and color temperature
+3. Keep similar subject positioning and framing featuring the main subject'
+4. Include the supporting background context
+5. Match the overall mood and atmosphere
+6. Ensure authentic detail and texture throughout
+7. Maintain proper depth separation between foreground and background
       `;
 
       // Pad to reach desired character count
@@ -189,7 +184,7 @@ export default function CameraScreen() {
       console.log('generating ChatGPT description');
       const response = await openai.chat.completions.create(
         {
-          model: 'gpt-4o-mini',
+          model: 'gpt-5-nano',
           messages: [
             {
               role: 'user',
@@ -207,7 +202,7 @@ export default function CameraScreen() {
               ],
             },
           ],
-          max_tokens: 4096,
+          max_completion_tokens: 4096,
         },
         { signal },
       );
@@ -226,6 +221,67 @@ export default function CameraScreen() {
     } catch (error) {
       console.error('ChatGPT description generation failed:', error);
       return '';
+    }
+  };
+
+  const generateImageWithStreaming = async (
+    prompt: string,
+    signal?: AbortSignal,
+  ): Promise<string> => {
+    try {
+      console.log('Starting streaming image generation');
+      console.log('Prompt length:', prompt.length);
+
+      const stream = await openai.images.generate({
+        prompt:
+          'create an image that is as close as possible to this description: ' +
+          prompt.substring(0, 3900),
+        model: 'gpt-image-1.5',
+        n: 1,
+        stream: true,
+        partial_images: 2,
+      });
+
+      let finalImageB64 = '';
+      let eventCount = 0;
+
+      console.log('Starting to process stream events...');
+
+      for await (const event of stream) {
+        if (signal?.aborted) {
+          console.log('Stream aborted by signal');
+          break;
+        }
+
+        eventCount++;
+        console.log('Event', eventCount, '- Type:', event.type);
+
+        if (event.type === 'image_generation.partial_image') {
+          const partialB64 = event.b64_json;
+          if (partialB64) {
+            console.log(
+              'Received partial image, index:',
+              event.partial_image_index,
+              'b64 length:',
+              partialB64.length,
+            );
+            setPartialImage(`data:image/png;base64,${partialB64}`);
+          }
+        } else if (event.type === 'image_generation.completed') {
+          finalImageB64 = event.b64_json || '';
+          console.log(
+            'Image generation completed, b64 length:',
+            finalImageB64.length,
+          );
+        }
+      }
+
+      console.log('Stream processing complete. Total events:', eventCount);
+
+      return finalImageB64 ? `data:image/png;base64,${finalImageB64}` : '';
+    } catch (error) {
+      console.error('Streaming image generation failed:', error);
+      throw error;
     }
   };
 
@@ -306,32 +362,20 @@ export default function CameraScreen() {
 
       let descriptionForDALLE = localDescription;
 
-      // Append ChatGPT description once it completes
+      // Replace local description with ChatGPT description once it completes
       if (chatGPTDescription) {
-        console.log('Appending ChatGPT description to local description');
-        const combinedDescription =
-          localDescription + '\n\n' + chatGPTDescription;
-        setDescription(combinedDescription);
-        descriptionForDALLE = combinedDescription;
+        console.log('Replacing local description with ChatGPT description');
+        setDescription(chatGPTDescription);
+        descriptionForDALLE = chatGPTDescription;
       }
 
-      // Generate DALL-E image with ChatGPT description
-      console.log('sending to dalle with ChatGPT description');
-      const imageResponse = await openai.images.generate(
-        {
-          model: 'gpt-image-1.5',
-          prompt:
-            'create an image that is as close as possible to this description: ' +
-            descriptionForDALLE.substring(0, 3900),
-          n: 1,
-          size: '1024x1024',
-        },
-        { signal },
+      // Generate DALL-E image with streaming
+      console.log('sending to dalle with streaming');
+      const generatedImageUrl = await generateImageWithStreaming(
+        descriptionForDALLE,
+        signal,
       );
       if (signal.aborted) return;
-
-      const b64 = imageResponse.data?.[0]?.b64_json;
-      const generatedImageUrl = `data:image/png;base64,${b64}`;
 
       if (generatedImageUrl) {
         setGeneratedImage(generatedImageUrl);
@@ -354,6 +398,7 @@ export default function CameraScreen() {
     setImageCaptured(false);
     setDescription('');
     setGeneratedImage('');
+    setPartialImage('');
     setShowDescription(false);
     setProcessingComplete(false);
     setOriginalPhotoUri('');
@@ -386,7 +431,30 @@ export default function CameraScreen() {
     } else if (showDescription) {
       return (
         <View style={styles.container}>
+          {/* Layer 0: CameraView */}
           <CameraView ref={cameraRef} style={styles.camera}></CameraView>
+
+          {/* Layer 1: Partial Image (or transparent if no partial image) */}
+          {partialImage ? (
+            <View style={styles.partialImageLayer}>
+              <Image
+                source={{ uri: partialImage }}
+                style={{ width: '100%', height: '100%' }}
+                resizeMode="cover"
+                onLoad={() => console.log('Partial image loaded successfully')}
+                onError={(e) =>
+                  console.error(
+                    'Partial image load error:',
+                    e.nativeEvent.error,
+                  )
+                }
+              />
+            </View>
+          ) : (
+            <View style={styles.partialImageLayer} />
+          )}
+
+          {/* Layer 2: Text Typing */}
           <SafeAreaView style={styles.processingContainer}>
             <Animated.View
               style={[styles.processingGradientBg, animatedGradientStyle]}
@@ -426,9 +494,7 @@ export default function CameraScreen() {
                 style={{ flex: 1 }}
               />
             </Animated.View>
-            <SafeAreaView
-              style={[styles.processingContent, { paddingHorizontal: 20 }]}
-            >
+            <SafeAreaView style={[styles.processingContent, { padding: 20 }]}>
               <Pressable style={styles.cancelButton} onPress={handleBack}>
                 <X color="#fff" size={28} />
               </Pressable>
@@ -442,7 +508,6 @@ export default function CameraScreen() {
         </View>
       );
     } else {
-      console.log('capture');
       const isLandscape = width > height;
       return (
         <View style={styles.container}>
@@ -491,6 +556,23 @@ const styles = StyleSheet.create({
   },
   camera: {
     flex: 1,
+  },
+  partialImageLayer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
+  },
+  debugIndicator: {
+    position: 'absolute',
+    top: 100,
+    left: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    padding: 8,
+    borderRadius: 4,
   },
   buttonContainer: {
     position: 'absolute',
