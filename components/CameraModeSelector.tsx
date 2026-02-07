@@ -27,10 +27,7 @@ export function CameraModeSelector({
         <Pressable
           key={mode.id}
           onPress={() => onModeChange(mode.id)}
-          style={[
-            styles.modeItem,
-            isLandscape && styles.modeItemLandscape,
-          ]}
+          style={[styles.modeItem, isLandscape && styles.modeItemLandscape]}
         >
           <Text
             style={[
@@ -52,7 +49,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 24,
+    gap: 8,
   },
   containerLandscape: {
     flexDirection: 'column',
@@ -65,7 +62,7 @@ const styles = StyleSheet.create({
   },
   modeItemLandscape: {
     paddingHorizontal: 4,
-    paddingVertical: 8,
+    paddingVertical: 0,
   },
   modeText: {
     color: '#fff',
@@ -80,5 +77,6 @@ const styles = StyleSheet.create({
   modeTextSelected: {
     fontWeight: '600',
     opacity: 1,
+    fontSize: 18,
   },
 });
