@@ -115,13 +115,13 @@ export function TypingText({
 const styles = StyleSheet.create({
   text: {
     color: '#e6e6e6',
-    fontSize: 14,
+    fontSize: 13,
     lineHeight: 20,
     fontFamily: 'Courier',
   },
   cursor: {
     color: 'rgb(228, 221, 255)',
-    fontSize: 14,
+    fontSize: 13,
     lineHeight: 20,
     fontFamily: 'Courier',
   },
