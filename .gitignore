@@ -8,6 +8,8 @@ web-build/
 expo-env.d.ts
 
 # native
+ios/Pods/
+ios/build/
 *.orig.*
 *.jks
 *.p8

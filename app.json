@@ -3,7 +3,7 @@
     "name": "ThousandWords",
     "slug": "ThousandWords",
     "version": "1.0.0",
-    "orientation": "portrait-landscape",
+    "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "myapp",
     "userInterfaceStyle": "automatic",
@@ -11,6 +11,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.srcurran.ThousandWords",
+      "deploymentTarget": "17.0",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSPhotoLibraryUsageDescription": "Allow access to save images to your photo library",
@@ -24,7 +25,8 @@
     },
     "plugins": [
       "expo-router",
-      "expo-font"
+      "expo-font",
+      "expo-updates"
     ],
     "experiments": {
       "typedRoutes": true
@@ -37,14 +39,17 @@
         "projectId": "16a186ab-badb-434a-8a5a-3f501c820c51"
       }
     },
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
+    "runtimeVersion": "1.0.0",
     "updates": {
-      "url": "https://u.expo.dev/16a186ab-badb-434a-8a5a-3f501c820c51"
+      "url": "https://u.expo.dev/16a186ab-badb-434a-8a5a-3f501c820c51",
+      "fallbackToCacheTimeout": 0
     },
     "android": {
-      "package": "com.srcurran.ThousandWords"
+      "package": "com.srcurran.ThousandWords",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      }
     }
   }
 }

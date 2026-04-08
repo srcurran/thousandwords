@@ -13,6 +13,18 @@
       "distribution": "internal",
       "channel": "preview"
     },
+    "preview-device": {
+      "distribution": "internal",
+      "channel": "preview",
+      "ios": {
+        "simulator": false
+      }
+    },
+    "simulator": {
+      "ios": {
+        "simulator": true
+      }
+    },
     "production": {
       "autoIncrement": true,
       "channel": "production"
